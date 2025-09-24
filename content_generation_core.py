@@ -5,7 +5,6 @@ from typing import List
 from typing import Optional
 import requests
 import logging
-from sasurldownload import download_file_from_blob
 from prompt_repository import get_core_prompt, get_modular_prompts
 
 logger = logging.getLogger("process_analysis_service")
