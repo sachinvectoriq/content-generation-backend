@@ -6,15 +6,12 @@ from content_generation_api import router as analysis_router
 
 app = FastAPI(title="Unified Content Generation and Analysis API")
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+#origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 # 2. Add the CORSMiddleware to the main app instance
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # Apply the list of allowed origins
+    allow_origins=["*"],          # Apply the list of allowed origins
     allow_credentials=True,         # Allows cookies/authorization headers
     allow_methods=["*"],            # Allows all HTTP methods (GET, POST, PUT, DELETE, OPTIONS)
     allow_headers=["*"],            # Allows all headers, including custom ones like Authorization
@@ -36,3 +33,4 @@ app.include_router(analysis_router)
 @app.get("/")
 async def root():
     return {"message": "API is online with CORS configured"}
+
