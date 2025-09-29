@@ -65,8 +65,9 @@ class ProcessAnalyzer:
                 + deliverables_prompt
         )
 
-        full_prompt = final_prompt + f"\n\n---TRANSCRIPT START---\n{raw_text}\n---TRANSCRIPT END---"
+        full_prompt = final_prompt + f"\noutputs must strictly follow the specified schemas and formats (JSON, XML, or plain text) without deviation, commentary, or additional explanation.\n---TRANSCRIPT START---\n{raw_text}\n---TRANSCRIPT END---"
         print(full_prompt)
 
         logger.info(f"Sending analysis prompt to LLM...{full_prompt}")
         return self.call_llm(full_prompt)
+
