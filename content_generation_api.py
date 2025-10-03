@@ -1,10 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from typing import List, Optional
 import json
+import os
+import tempfile  # NEW: Needed for creating temporary files
+from pathlib import Path  # NEW: Useful for file path manipulation
 
 from process_analyzer import AnalysisResult
 from content_generation_core import ProcessAnalyzer
-import os
+from file_content_extractor import extract_content  # NEW: Import the unified extractor function
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,19 +27,14 @@ async def analyze_process(
         selected_outputs_str: str = Form(..., alias="selected_outputs"),
         # Make the file and text inputs optional
         transcript_file: Optional[UploadFile] = File(None),
-        transcript_text: Optional[str] = Form(None)
-):
-    """
-    Analyzes an uploaded transcript file or text based on selected outputs.
-    """
-    # 1. Validate that at least one input type is provided
+        transcript_text: Optional[str] = Form(None)):
+
     if not transcript_file and not transcript_text:
         raise HTTPException(
             status_code=400,
             detail="Either a 'transcript_file' or 'transcript_text' must be provided."
         )
 
-    # 2. Parse the selected outputs string into a Python list
     try:
         selected_outputs: List[str] = json.loads(selected_outputs_str)
         if not all(isinstance(item, str) for item in selected_outputs):
@@ -46,18 +45,52 @@ async def analyze_process(
             detail=f"Invalid format for selected_outputs. Expected a JSON list of strings. Error: {str(e)}"
         )
 
-    # 3. Handle the two different input types
     if transcript_file:
-        # Read the uploaded file's content as bytes and then decode to a string
+        temp_file_path = None
+        extracted_content = None
+
         try:
-            transcript_bytes = await transcript_file.read()
-            transcript_text = transcript_bytes.decode('utf-8')
+
+            file_extension = Path(transcript_file.filename).suffix if transcript_file.filename else ".tmp"
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+                temp_file_path = temp_file.name
+
+                # Read the uploaded file's content (bytes) and write it to the temporary file
+                content = await transcript_file.read()
+                temp_file.write(content)
+                temp_file.flush()
+
+            extracted_content = extract_content(temp_file_path)
+
+            if extracted_content is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Failed to extract text from file: {transcript_file.filename}. Check file integrity or ensure dependencies (pypdf, python-docx) are installed."
+                )
+            transcript_text = extracted_content
+
+        except HTTPException as e:
+            # Re-raise explicit HTTPExceptions (like the 422 above)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Error: {str(e)}"
+            )
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to read and decode file: {str(e)}")
+            print(f"File extraction error: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to process uploaded file: {str(e)}")
+        finally:
+            # CRITICAL: Clean up the temporary file from disk immediately
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
-    # The transcript_text variable now holds the content, regardless of the input type
+    # Check if transcript_text is still empty after processing (applies if a file was uploaded but failed extraction)
+    if not transcript_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Transcript content is empty after processing the file or was not provided."
+        )
 
-    # 4. Call the core logic
     try:
         output = ANALYZER.analyze(
             selected_outputs=selected_outputs,
@@ -65,4 +98,5 @@ async def analyze_process(
         )
         return AnalysisResult(output=output)
     except Exception as e:
+        print(f"Core analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
