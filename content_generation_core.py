@@ -6,6 +6,7 @@ from typing import Optional
 import requests
 import logging
 from prompt_repository import get_core_prompt, get_modular_prompts
+from llmpostprocessing import parse_llm_output
 
 logger = logging.getLogger("process_analysis_service")
 
@@ -65,9 +66,11 @@ class ProcessAnalyzer:
                 + deliverables_prompt
         )
 
-        full_prompt = final_prompt + f"\noutputs must strictly follow the specified schemas and formats (JSON, XML, or plain text) without deviation, commentary, or additional explanation.\n---TRANSCRIPT START---\n{raw_text}\n---TRANSCRIPT END---"
+        full_prompt = final_prompt + f"\n---TRANSCRIPT START---\n{raw_text}\n---TRANSCRIPT END---"
         print(full_prompt)
 
         logger.info(f"Sending analysis prompt to LLM...{full_prompt}")
-        return self.call_llm(full_prompt)
+        llm_response= self.call_llm(full_prompt)
+        print(f"llm responded already, {llm_response}",)
+        return parse_llm_output(llm_response)
 
